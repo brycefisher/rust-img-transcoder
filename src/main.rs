@@ -6,7 +6,9 @@ use hyper::Url;
 use hyper::client::Request;
 use hyper::header::common::ContentType;
 use mime::{Mime, Image, Jpeg, Png, Gif};
-use image::load_from_memory;
+use image::{load_from_memory, GenericImage};
+use std::io::File;
+use std::rand;
 
 fn main() {
     let url = match Url::parse("http://c2.staticflickr.com/8/7384/12315308103_94b0a3f6cd_c.jpg") {
@@ -43,10 +45,10 @@ fn main() {
         Err(e) => panic!("Unable to read http response body: {}", e)
     };
     let img_in = match load_from_memory(body.as_slice_(), format) {
-        Ok(img) => img.to_rgb(),
+        Ok(img) => img,
         Err(e) => panic!("Error reading image: {}", e)
     };
-    let (width, height) = img_in.dimensions();
-    //println!("Width: {}px | Height: {}px", width, height);
 
+    let fout = File::create(&Path::new("test.png")).unwrap();
+    let _ = img_in.save(fout, image::PNG);
 }
