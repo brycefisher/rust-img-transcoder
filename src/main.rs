@@ -6,6 +6,7 @@ use hyper::Url;
 use hyper::client::Request;
 use hyper::header::common::ContentType;
 use mime::{Mime, Image, Jpeg, Png, Gif};
+use image::load_from_memory;
 
 fn main() {
     let url = match Url::parse("http://c2.staticflickr.com/8/7384/12315308103_94b0a3f6cd_c.jpg") {
@@ -26,7 +27,6 @@ fn main() {
         .send().unwrap(); // failure: Error reading Response head.
 
     println!("Response: {}", res.status);
-    //println!("{}", res.headers); // Prints all HTTP response headers
 
     let format = match res.headers.get::<ContentType>() {
         Some(&ContentType(Mime(Image, Png, _))) => image::PNG,
@@ -38,9 +38,15 @@ fn main() {
 
     println!("{}", format);
 
-    //match copy(&mut res, &mut stdout()) {
-    //    Ok(..) => (),
-    //    Err(e) => panic!("Stream failure: {}", e)
-    //};
+    let body = match res.read_to_end() {
+        Ok(v) => v.clone(),
+        Err(e) => panic!("Unable to read http response body: {}", e)
+    };
+    let img_in = match load_from_memory(body.as_slice_(), format) {
+        Ok(img) => img.to_rgb(),
+        Err(e) => panic!("Error reading image: {}", e)
+    };
+    let (width, height) = img_in.dimensions();
+    //println!("Width: {}px | Height: {}px", width, height);
 
 }
