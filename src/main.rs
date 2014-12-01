@@ -107,24 +107,39 @@ fn parse_request(mut req: Request, mut res: Response) {
         do_404(res);
         return;
     }
+
+    println!("Path is a match. Determining parameters...")
     let caps = re.captures(path).unwrap();
-    let format = caps.name("format");
-    let width = caps.name("width");
-    let height = caps.name("height");
+    let format = match caps.name("format") {
+        "png" => image::PNG,
+        "jpg" => image::JPEG,
+        _ => unreachable!()
+    };
+    let width: u32 = match from_str(caps.name("width")) {
+        Some(width) => width,
+        None => { println!("Invalid width {}", caps.name("width")); do_404(res); return; }
+    };
+    let height: u32 = match from_str(caps.name("height")) {
+        Some(height) => height,
+        None => { println!("Invalid width {}", caps.name("height")); do_404(res); return; }
+    };
     println!("Format {} | Width {}px | Height {}px", format, width, height);
 
     // Transcode hardcoded path
     let url = Url::parse("http://c2.staticflickr.com/8/7384/12315308103_94b0a3f6cd_c.jpg").unwrap();
-    let img_in = match load_img_from_url(url) {
+    let mut img_in = match load_img_from_url(url) {
         Ok(img) => { println!("Successfully loaded image into memory"); img },
         Err(e) => { println!("Error loading img from url {}", e); return; }
     };
+
     let fout = File::create(&Path::new("test.png")).unwrap();
-    let _ = img_in.save(fout, image::PNG);
-    println!("Saved image to disk as a png");
+    let _ = img_in
+        .resize_exact(width, height, image::FilterType::Nearest)
+        .save(fout, format);
+    println!("Saved image to disk as a {}", format);
 
     // Send back dummy response
-    let out = b"Saved image to disk as a png";
+    let out = b"Saved image to disk";
     res.headers_mut().set(ContentLength(out.len()));
     let mut res = try_return!(res.start());
     try_return!(res.write(out));
