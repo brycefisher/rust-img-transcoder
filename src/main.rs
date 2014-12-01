@@ -17,9 +17,9 @@ use mime::{Mime, Image, Jpeg, Png, Gif};
 #[allow(unused_imports)]
 use image::{load_from_memory, GenericImage, DynamicImage};
 
-use std::io::File;
 use std::error::Error;
 use std::io::net::ip::Ipv4Addr;
+use std::io::ByRefWriter;
 
 use TranscodeError::{HttpStatusError, UnsupportedContentType, HttpBodyError, PistonImageLoadError, RemoteServerUnreachable};
 
@@ -107,7 +107,6 @@ fn parse_request(mut req: Request, mut res: Response) {
         do_404(res);
         return;
     }
-
     println!("Path is a match. Determining parameters...")
     let caps = re.captures(path).unwrap();
     let format = match caps.name("format") {
@@ -131,18 +130,21 @@ fn parse_request(mut req: Request, mut res: Response) {
         Ok(img) => { println!("Successfully loaded image into memory"); img },
         Err(e) => { println!("Error loading img from url {}", e); return; }
     };
-
-    let fout = File::create(&Path::new("test.png")).unwrap();
-    let _ = img_in
-        .resize_exact(width, height, image::FilterType::Nearest)
-        .save(fout, format);
-    println!("Saved image to disk as a {}", format);
+    let img_out = img_in.resize_exact(width, height, image::FilterType::Nearest);
 
     // Send back dummy response
-    let out = b"Saved image to disk";
-    res.headers_mut().set(ContentLength(out.len()));
+    match format {
+        image::JPEG => res.headers_mut().set(ContentType(Mime(Image,Jpeg,vec!()))),
+        image::PNG => res.headers_mut().set(ContentType(Mime(Image,Png,vec!()))),
+        _ => unreachable!()
+    };
+    // Do I need to figure out the length? I hope not, but I could probably manage using a reader/writer...
+    //res.headers_mut().set(ContentLength(out.len()));
     let mut res = try_return!(res.start());
-    try_return!(res.write(out));
+    {
+        img_out.save(res.by_ref(), format);
+        println!("Sent back image");
+    }
     try_return!(res.end());
 }
 
