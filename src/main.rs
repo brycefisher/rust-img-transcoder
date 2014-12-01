@@ -88,6 +88,33 @@ fn do_404(mut res: Response) {
     try_return!(res.start().and_then(|res| res.end()));
 }
 
+fn get_src_url(path: &str) -> Option<Url>{
+    let mut full_url = String::from_str("http://localhost");
+    full_url.push_str(path);
+    println!("Full url is {}", full_url.as_slice());
+    match Url::parse(full_url.as_slice()) {
+        Ok(url) => {
+            match url.query_pairs() {
+                Some(pairs) => {
+                    for &(ref key, ref val) in pairs.iter() {
+                        if key.as_slice() == "src" {
+                            println!("Found src: {}", val.as_slice());
+                            match Url::parse(val.as_slice()) {
+                                Ok(src_url) => return Some(src_url),
+                                Err(e) => { println!("Error parsing src url: {}", e); return None; }
+                            }
+                        }
+                    }
+                    println!("No src query param");
+                    None
+                },
+                None => { println!("No query params in url"); None }
+            }
+        },
+        Err(e) => { println!("Error parsing url: {}", e); None }
+    }
+}
+
 #[allow(unused_mut)]
 fn parse_request(mut req: Request, mut res: Response) {
     // 404 on wrongly formatted requests
@@ -99,8 +126,6 @@ fn parse_request(mut req: Request, mut res: Response) {
         hyper::uri::AbsolutePath(ref path) => path.as_slice(),
         _ => { do_404(res); return; }
     };
-
-    // use regex to disect incoming path OR 404
     println!("Incoming path: {}", path);
     let re = regex!("^/(?P<format>png|jpg)/(?P<width>[0-9]{2,4})/(?P<height>[0-9]{2,4})/");
     if !re.is_match(path) {
@@ -108,6 +133,8 @@ fn parse_request(mut req: Request, mut res: Response) {
         return;
     }
     println!("Path is a match. Determining parameters...")
+
+    // use regex to disect incoming path OR 404
     let caps = re.captures(path).unwrap();
     let format = match caps.name("format") {
         "png" => image::PNG,
@@ -122,10 +149,13 @@ fn parse_request(mut req: Request, mut res: Response) {
         Some(height) => height,
         None => { println!("Invalid width {}", caps.name("height")); do_404(res); return; }
     };
-    println!("Format {} | Width {}px | Height {}px", format, width, height);
+    let url = match get_src_url(path) {
+        Some(url) => url,
+        None => { do_404(res); return; }
+    };
+    println!("Format {} | Width {}px | Height {}px ", format, width, height);
 
-    // Transcode hardcoded path
-    let url = Url::parse("http://c2.staticflickr.com/8/7384/12315308103_94b0a3f6cd_c.jpg").unwrap();
+    // Transcode
     let mut img_in = match load_img_from_url(url) {
         Ok(img) => { println!("Successfully loaded image into memory"); img },
         Err(e) => { println!("Error loading img from url {}", e); return; }
@@ -138,8 +168,6 @@ fn parse_request(mut req: Request, mut res: Response) {
         image::PNG => res.headers_mut().set(ContentType(Mime(Image,Png,vec!()))),
         _ => unreachable!()
     };
-    // Do I need to figure out the length? I hope not, but I could probably manage using a reader/writer...
-    //res.headers_mut().set(ContentLength(out.len()));
     let mut res = try_return!(res.start());
     {
         img_out.save(res.by_ref(), format);
