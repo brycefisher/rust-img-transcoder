@@ -1,5 +1,7 @@
 #![feature(macro_rules, phase)]
-
+#![feature(phase)]
+extern crate regex;
+#[phase(plugin)] extern crate regex_macros;
 extern crate hyper;
 extern crate mime;
 extern crate image;
@@ -93,10 +95,23 @@ fn parse_request(mut req: Request, mut res: Response) {
         do_404(res);
         return;
     }
-    let _path = match req.uri {
-        hyper::uri::AbsolutePath(ref path) => path,
+    let path = match req.uri {
+        hyper::uri::AbsolutePath(ref path) => path.as_slice(),
         _ => { do_404(res); return; }
     };
+
+    // use regex to disect incoming path OR 404
+    println!("Incoming path: {}", path);
+    let re = regex!("^/(?P<format>png|jpg)/(?P<width>[0-9]{2,4})/(?P<height>[0-9]{2,4})/");
+    if !re.is_match(path) {
+        do_404(res);
+        return;
+    }
+    let caps = re.captures(path).unwrap();
+    let format = caps.name("format");
+    let width = caps.name("width");
+    let height = caps.name("height");
+    println!("Format {} | Width {}px | Height {}px", format, width, height);
 
     // Transcode hardcoded path
     let url = Url::parse("http://c2.staticflickr.com/8/7384/12315308103_94b0a3f6cd_c.jpg").unwrap();
