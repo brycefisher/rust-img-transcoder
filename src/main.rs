@@ -177,7 +177,7 @@ fn parse_request(mut req: Request, mut res: Response) {
 }
 
 fn main() {
-    let server = Server::http(Ipv4Addr(127, 0, 0, 1), 1337);
+    let server = Server::http(Ipv4Addr(0, 0, 0, 0), 1337);
     server.listen(parse_request).unwrap();
-    println!("Listening on http://127.0.0.1:1337");
+    println!("Listening on http://0.0.0.0:1337");
 }
