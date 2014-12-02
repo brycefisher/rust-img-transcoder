@@ -127,6 +127,16 @@ fn parse_request(mut req: Request, mut res: Response) {
         _ => { do_404(res); return; }
     };
     println!("Incoming path: {}", path);
+
+    // Respond to health ELB check
+    if path == "/health-check" {
+        *res.status_mut() = hyper::status::Ok;
+        try_return!(res.start().and_then(|res| res.end()));
+        println!("Health check");
+        return;
+    }
+
+    // Check for transcode requests
     let re = regex!("^/(?P<format>png|jpg)/(?P<width>[0-9]{2,4})/(?P<height>[0-9]{2,4})/");
     if !re.is_match(path) {
         do_404(res);
